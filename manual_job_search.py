@@ -191,14 +191,17 @@ class JobManager:
         """Parse raw job content into structured data"""
         jobs = []
 
-        # Skip header/template lines
+        # Skip header/template lines and clean
         skip_patterns = ['paste below', 'job details', 'run:', '---']
         lines = text.split('\n')
         content_lines = []
         for line in lines:
             line_lower = line.lower().strip()
             if not any(p in line_lower for p in skip_patterns) and line.strip():
-                content_lines.append(line)
+                # Clean the line - remove extra whitespace
+                cleaned = ' '.join(line.strip().split())
+                if cleaned:
+                    content_lines.append(cleaned)
         content = '\n'.join(content_lines)
 
         # Detect source
@@ -210,35 +213,26 @@ class JobManager:
         elif 'jobsdb' in text.lower():
             source = 'JobsDB'
 
-        # Extract job title - look for common patterns
+        # Extract title - use first non-empty line that looks like a job title
         title = "Unknown Title"
-        title_patterns = [
-            r'(Senior|Lead|Principal|Staff)?\s*(Manager|DevOps|Cloud|Engineer|Architect|Lead|SRE)\s*(Engineer|Manager|Lead|Architect)?',
-            r'^[A-Z][a-zA-Z\s]{10,60}$',  # Simple title-like lines
-        ]
-        for pattern in title_patterns:
-            title_match = re.search(pattern, content[:500])  # Check first 500 chars
-            if title_match:
-                title = title_match.group(0).strip()
+        for line in content_lines[:5]:
+            # Skip lines that look like locations or dates
+            if any(x in line.lower() for x in ['hong kong', 'posted', 'permanent', 'full time', 'view all']):
+                continue
+            # Skip lines that are just company names (contain Ltd, Limited, etc)
+            if any(x in line for x in ['Limited', 'Ltd', 'Group', 'Holdings', 'Inc']):
+                continue
+            # This looks like a title
+            if len(line) > 8 and len(line) < 80:
+                title = line
                 break
 
-        # If still unknown, take first substantial line
-        if title == "Unknown Title":
-            for line in content_lines[:5]:
-                if len(line.strip()) > 10:
-                    title = line.strip()[:60]
-                    break
-
-        # Extract company - look for common patterns
+        # Extract company - look for it after title or common patterns
         company = "Unknown Company"
-        company_patterns = [
-            r'([A-Z][a-zA-Z\s]{2,30} (Limited|Ltd\.?|Pte\.? Ltd\.?|Group|Holdings|HK|International|Inc\.?))',
-            r'(?:Company|Client|Employer):\s*([^\n]+)',
-        ]
-        for pattern in company_patterns:
-            company_match = re.search(pattern, content)
-            if company_match:
-                company = company_match.group(1).strip()
+        for line in content_lines[:10]:
+            # Look for company patterns
+            if any(x in line for x in ['Limited', 'Ltd', 'Group', 'Holdings', 'Inc', 'TEKsystems']):
+                company = line
                 break
 
         # Extract posted date
@@ -316,16 +310,40 @@ class JobManager:
             return sorted(jobs, key=lambda j: j.added_date, reverse=True)
 
     def export_csv(self, filepath):
-        """Export to CSV"""
+        """Export to CSV - includes all jobs from history"""
+        # Get all jobs from history
+        all_jobs = []
+        for session in self.history:
+            for job in session.get("jobs", []):
+                # Skip template/placeholder jobs
+                if job.title and job.title != "PASTE BELOW:" and job.title != "Unknown Title":
+                    all_jobs.append(job)
+
+        # Also add current jobs
+        for job in self.jobs:
+            if job.title and job.title != "PASTE BELOW:" and job.title != "Unknown Title":
+                all_jobs.append(job)
+
+        # Remove duplicates (same title + company)
+        seen = set()
+        unique_jobs = []
+        for job in all_jobs:
+            key = (job.title.lower(), job.company.lower())
+            if key not in seen:
+                seen.add(key)
+                unique_jobs.append(job)
+
         with open(filepath, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow(["Job Title", "Company", "Source", "Key Skills", "Posted Date", "Link", "Location", "Added Date"])
-            for job in self.jobs:
+            for job in unique_jobs:
                 writer.writerow([
                     job.title, job.company, job.source,
                     ", ".join(job.skills), job.posted_date,
                     job.link, job.location, job.added_date
                 ])
+
+        print(f"📁 Exported {len(unique_jobs)} jobs to {filepath}")
         return filepath
 
     def export_json(self, filepath):
