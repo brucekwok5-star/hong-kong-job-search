@@ -365,10 +365,23 @@ class JobManager:
             return None, "gspread not installed"
 
         try:
-            # Try to load credentials
+            import pickle
+
+            # Try OAuth2 with saved token first
+            token_file = 'token.pickle'
+
+            # Try service account first
             scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-            credentials = Credentials.from_service_account_file('credentials.json', scopes=scopes)
-            gc = gspread.authorize(credentials)
+
+            # Try loading service account credentials
+            try:
+                credentials = Credentials.from_service_account_file('credentials.json', scopes=scopes)
+                gc = gspread.authorize(credentials)
+            except Exception as e:
+                # Try OAuth2 flow
+                from google.oauth2.oauth2 import InstalledAppFlow
+                flow = InstalledAppFlow.from_client_secrets_file('credentials.json', scopes)
+                gc = flow.run_local_server(port=0)
 
             # Create or open spreadsheet
             try:
@@ -393,7 +406,7 @@ class JobManager:
             return sh.url, "Exported to Google Sheets!"
 
         except FileNotFoundError:
-            return None, "credentials.json not found"
+            return None, "credentials.json not found. See README for setup."
         except Exception as e:
             return None, str(e)
 
@@ -798,6 +811,19 @@ def main():
             else:
                 print("No jobs found.")
 
+        elif arg == "--gsheets" or arg == "-g":
+            if not GSHEETS_AVAILABLE:
+                print("Error: gspread not installed. Run: pip3 install gspread google-auth")
+                return
+            manager = JobManager()
+            url, msg = manager.export_google_sheets()
+            if url:
+                print(f"✅ {msg}")
+                print(f"🔗 {url}")
+                subprocess.run(["open", url])
+            else:
+                print(f"❌ Error: {msg}")
+
         elif arg == "--help" or arg == "-h":
             print("""
 Usage: python3 manual_job_search.py [OPTIONS]
@@ -807,6 +833,7 @@ Options:
   --browse, -b     Open browser tabs
   --paste, -p      Open text file for pasting
   --stats          Show job statistics
+  --gsheets, -g    Export to Google Sheets
   --gui            Force GUI mode (default if available)
   --help, -h       Show this help
 
@@ -814,6 +841,7 @@ Examples:
   python3 manual_job_search.py           # Start GUI
   python3 manual_job_search.py --browse   # Open browser tabs
   python3 manual_job_search.py --parse    # Parse and export
+  python3 manual_job_search.py --gsheets   # Export to Google Sheets
 
 No arguments: Opens GUI (if available) or browser tabs
 """)
