@@ -1,0 +1,9 @@
+# Ignore temporary files
+screenshots/
+*.png
+job_details_*.txt
+*.csv
+__pycache__/
+.pytest_cache/
+*.pyc
+.DS_Store

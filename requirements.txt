@@ -1,0 +1,11 @@
+# Selenium for web automation
+selenium>=4.0.0
+
+# WebDriver manager for automatic ChromeDriver installation
+webdriver-manager>=4.0.0
+
+# BeautifulSoup for HTML parsing
+beautifulsoup4>=4.0.0
+
+# Requests for HTTP calls
+requests>=2.28.0
