@@ -826,9 +826,45 @@ def main():
 
         elif arg == "--numbers" or arg == "-n":
             manager = JobManager()
-            manager.export_csv("hong_kong_jobs.csv")
-            subprocess.run(["open", "-a", "Numbers", "hong_kong_jobs.csv"])
-            print("✅ Opened in Numbers")
+
+            csv_file = "hong_kong_jobs.csv"
+            numbers_file = "Job_Search.numbers"
+
+            # Export current jobs to CSV
+            manager.export_csv(csv_file)
+
+            if os.path.exists(numbers_file):
+                # Append to existing Numbers file using AppleScript
+                jobs = manager.jobs
+                if jobs:
+                    # Build AppleScript
+                    abs_path = os.path.abspath(numbers_file)
+                    for job in jobs:
+                        title = job.title.replace('"', '')
+                        company = job.company.replace('"', '')
+                        skills = ', '.join(job.skills)
+                        script = f'''tell application "Numbers"
+                            open "{abs_path}"
+                            tell first table of active sheet of document 1
+                                set newRow to make new row
+                                set value of cell 1 of newRow to "{title}"
+                                set value of cell 2 of newRow to "{company}"
+                                set value of cell 3 of newRow to "{job.source}"
+                                set value of cell 4 of newRow to "{skills}"
+                                set value of cell 5 of newRow to "{job.posted_date}"
+                                set value of cell 6 of newRow to "{job.location}"
+                            end tell
+                        end tell'''
+                        subprocess.run(["osascript", "-e", script])
+                    print(f"✅ Appended {len(jobs)} job(s) to {numbers_file}")
+                else:
+                    print("No jobs to append")
+            else:
+                # Open CSV in Numbers - it will create new document
+                subprocess.run(["open", "-a", "Numbers", csv_file])
+                print(f"✅ Opened CSV in Numbers. Save as Job_Search.numbers for next time.")
+
+            print(f"✅ Done")
 
         elif arg == "--excel" or arg == "-x":
             if not EXCEL_AVAILABLE:
