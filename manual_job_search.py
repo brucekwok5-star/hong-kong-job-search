@@ -824,6 +824,21 @@ def main():
             else:
                 print(f"❌ Error: {msg}")
 
+        elif arg == "--numbers" or arg == "-n":
+            manager = JobManager()
+            manager.export_csv("hong_kong_jobs.csv")
+            subprocess.run(["open", "-a", "Numbers", "hong_kong_jobs.csv"])
+            print("✅ Opened in Numbers")
+
+        elif arg == "--excel" or arg == "-x":
+            if not EXCEL_AVAILABLE:
+                print("Error: openpyxl not installed. Run: pip3 install openpyxl")
+                return
+            manager = JobManager()
+            manager.export_excel("hong_kong_jobs.xlsx")
+            subprocess.run(["open", "-a", "Microsoft Excel", "hong_kong_jobs.xlsx"])
+            print("✅ Opened in Excel")
+
         elif arg == "--help" or arg == "-h":
             print("""
 Usage: python3 manual_job_search.py [OPTIONS]
@@ -833,6 +848,8 @@ Options:
   --browse, -b     Open browser tabs
   --paste, -p      Open text file for pasting
   --stats          Show job statistics
+  --numbers, -n    Open in Apple Numbers
+  --excel, -x      Open in Microsoft Excel
   --gsheets, -g    Export to Google Sheets
   --gui            Force GUI mode (default if available)
   --help, -h       Show this help
@@ -841,7 +858,7 @@ Examples:
   python3 manual_job_search.py           # Start GUI
   python3 manual_job_search.py --browse   # Open browser tabs
   python3 manual_job_search.py --parse    # Parse and export
-  python3 manual_job_search.py --gsheets   # Export to Google Sheets
+  python3 manual_job_search.py --numbers  # Open in Numbers
 
 No arguments: Opens GUI (if available) or browser tabs
 """)
