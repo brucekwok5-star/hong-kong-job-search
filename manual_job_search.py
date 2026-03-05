@@ -191,6 +191,16 @@ class JobManager:
         """Parse raw job content into structured data"""
         jobs = []
 
+        # Skip header/template lines
+        skip_patterns = ['paste below', 'job details', 'run:', '---']
+        lines = text.split('\n')
+        content_lines = []
+        for line in lines:
+            line_lower = line.lower().strip()
+            if not any(p in line_lower for p in skip_patterns) and line.strip():
+                content_lines.append(line)
+        content = '\n'.join(content_lines)
+
         # Detect source
         source = source_hint
         if 'indeed' in text.lower():
@@ -200,28 +210,49 @@ class JobManager:
         elif 'jobsdb' in text.lower():
             source = 'JobsDB'
 
-        # Extract job title
-        title_match = re.search(r'(?:Job title:)?\s*([A-Z][^\n]{10,80})', text)
-        title = title_match.group(1).strip() if title_match else "Unknown Title"
+        # Extract job title - look for common patterns
+        title = "Unknown Title"
+        title_patterns = [
+            r'(Senior|Lead|Principal|Staff)?\s*(Manager|DevOps|Cloud|Engineer|Architect|Lead|SRE)\s*(Engineer|Manager|Lead|Architect)?',
+            r'^[A-Z][a-zA-Z\s]{10,60}$',  # Simple title-like lines
+        ]
+        for pattern in title_patterns:
+            title_match = re.search(pattern, content[:500])  # Check first 500 chars
+            if title_match:
+                title = title_match.group(0).strip()
+                break
 
-        # Extract company
-        company_match = re.search(r'(?:Company|Client|Employer|Pte\.? Ltd\.?|Limited|HK):?\s*([^\n]{3,50})', text, re.IGNORECASE)
-        if not company_match:
-            company_match = re.search(r'([A-Z][^\n]{3,40} (?:Limited|Pte\.? Ltd\.?|Ltd\.?|HK))', text)
-        company = company_match.group(1).strip() if company_match else "Unknown Company"
+        # If still unknown, take first substantial line
+        if title == "Unknown Title":
+            for line in content_lines[:5]:
+                if len(line.strip()) > 10:
+                    title = line.strip()[:60]
+                    break
+
+        # Extract company - look for common patterns
+        company = "Unknown Company"
+        company_patterns = [
+            r'([A-Z][a-zA-Z\s]{2,30} (Limited|Ltd\.?|Pte\.? Ltd\.?|Group|Holdings|HK|International|Inc\.?))',
+            r'(?:Company|Client|Employer):\s*([^\n]+)',
+        ]
+        for pattern in company_patterns:
+            company_match = re.search(pattern, content)
+            if company_match:
+                company = company_match.group(1).strip()
+                break
 
         # Extract posted date
-        date_match = re.search(r'Posted\s*(\d+[hdwmy]\s*ago|Today|Yesterday)', text, re.IGNORECASE)
+        date_match = re.search(r'Posted\s*(\d+\s*(day|week|month|year|hour|hr|h)\s*ago|Today|Yesterday)', content, re.IGNORECASE)
         posted_date = date_match.group(1).strip() if date_match else ""
 
         # Extract skills
         found_skills = []
         for skill in self.custom_skills:
-            if re.search(r'\b' + re.escape(skill) + r'\b', text, re.IGNORECASE):
+            if re.search(r'\b' + re.escape(skill) + r'\b', content, re.IGNORECASE):
                 found_skills.append(skill)
 
         # Extract link
-        link_match = re.search(r'(https?://[^\s<>"]+)', text)
+        link_match = re.search(r'(https?://[^\s<>"]+)', content)
         link = link_match.group(1).strip() if link_match else ""
 
         jobs.append({
